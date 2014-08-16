@@ -1,0 +1,81 @@
+body {
+  background-color: #233036;
+}
+
+#table {
+  background-image: url('../img/blackjack_table.png');
+  -webkit-background-size: cover;
+  -moz-background-size: cover;
+  -o-background-size: cover;
+  background-size: cover;;
+  width: 1280px;
+  height: 960px;
+  margin: 0 auto;
+  position: relative;
+}
+
+#alert {
+  color: white;
+  font-weight: bold;
+  position: absolute;
+  top: 50%;
+  width: 100%;
+}
+
+#alert > div {
+  font-size: 1.5em;
+}
+
+#dealer {
+  position: absolute;
+  top: 25%;
+  left: 30%;
+  width: 500px;
+}
+
+#player-1 {
+  position: absolute;
+  top: 57%;
+  left: 26%;
+  width: 600px;
+}
+
+#player-1 .bankroll_bet {
+  color: white;
+  font-weight: bold;
+  margin-top: 25px;
+}
+
+#player-1 .player-controls {
+  margin-top: 15px;
+  clear: both;
+  margin: 0 auto 5px auto;
+  max-width: 328px;
+  height: 30px;
+}
+
+.cards {
+  height: 130px;
+  min-width: 100px;
+  margin: 0 auto;
+  clear: right;
+  display: -webkit-box;
+  display: -moz-box;
+  display: box;
+  -webkit-box-align: center;
+  -moz-box-align: center;
+  box-align: center;
+}
+
+.card {
+  margin-left: 5px;
+  background: url('../img/full_deck.png') no-repeat;
+  width: 83px;
+  height: 115px;
+  float: left;
+}
+
+.back {
+  background: url('../img/back_of_card.png') no-repeat;
+  background-position: -1px 0px;
+}

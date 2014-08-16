@@ -3,13 +3,571 @@
 <head>
     <meta charset="UTF-8">
     <title>Blackjack</title>
-    <link rel="stylesheet" type="text/css" href="blackjack.css" />
+    <link rel="stylesheet" href="static/css/bootstrap.min.css">
+    <link rel="stylesheet" href="static/css/bootstrap-theme.min.css">
+    <script src="static/js/jquery.min.js"></script>
+    <script src="static/js/bootstrap.min.js"></script>
+    <script type="text/javascript" src="static/js/ko.js"></script>
+    <script type="text/javascript" src="static/js/underscore.js"></script>
+    <link rel="stylesheet" type="text/css" href="static/css/style.css" />
 </head>
 <body>
-    <div class="card two spade"></div>
-    <div class="card three heart"></div>
-    <div class="card four club"></div>
-    <div class="card ace spade"></div>
-    <div class="card back"></div>
+  <div id="table">
+    <div id="alert">
+      <center><div data-bind="text: MESSAGE"></div></center>
+    </div>
+    <div id="dealer" data-bind="with: dealer">
+      <div class="cards" data-bind="foreach: hand">
+        <!-- ko if: visible -->
+        <div class="card" data-bind="style: {backgroundPosition: background_styling().join(' ')}"></div>
+        <!-- /ko -->
+        <!-- ko if: !visible() -->
+        <div class="card" data-bind="style: {background: 'url(static//img/back_of_card.png) no-repeat'}">
+        </div>
+        <!-- /ko -->
+      </div>
+    </div>
+    <div id="player-1" data-bind="foreach: players">
+      <!-- ko if: !is_dealer -->
+      <center>
+      <div class="player-controls">
+        <div class="btn-group" data-bind="foreach: decisions">
+          <button type="button" class="btn btn-default" data-bind="text: name, click: fn">
+          </button>
+        </div>
+      </div>
+      <div class="cards" data-bind="foreach: hand">
+        <div class="card" data-bind="style: {backgroundPosition: background_styling().join(' ')}, if: visible()"></div>
+      </div>
+      <div class="bankroll_bet">
+        <div class="bankroll" data-bind="text: 'Bankroll: $' + stack()"></div>
+        <div class="bet" data-bind="text: 'Bet: $' + bet()"></div>
+      </div>
+      </center>
+      <!-- /ko -->
+    </div>
+  </div>
 </body>
+<script type="text/javascript">
+  (function(_,ko) {
+    Function.prototype.makeSubclass= function(proto) {
+        function Class() {
+            if (!(this instanceof Class))
+                throw('Constructor called without "new"');
+            if ('_init' in this)
+                this._init.apply(this, arguments);
+        }
+        Function.prototype.makeSubclass.nonconstructor.prototype= this.prototype;
+        Class.prototype= new Function.prototype.makeSubclass.nonconstructor();
+        for (var e in proto) { Class.prototype[e] = proto[e]; }
+        return Class;
+    };
+    Function.prototype.makeSubclass.nonconstructor= function() {};
+
+    /**
+    * @enum SUITS
+    */
+    var SUITS = {1: 'spade', 2: 'club', 3: 'diamond', 4: 'heart'}, 
+
+    /**
+    * @enum RANKS
+    */
+    RANKS = { 1: 'ace', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven', 8: 'eight', 9: 'nine', 10: 'ten', 11: 'jack', 12: 'queen', 13: 'king'},
+
+    SUITS_CSS = {'diamond': '0px','spade': '-115px','heart': '-230px','club': '-345px'
+    }, RANKS_CSS = {'ace': '0px','two': '-93px','three': '-186px','four': '-279px','five': '-372px','six': '-465px','seven': '-558px','eight': '-651px','nine': '-744px','ten': '-837px','jack': '-930px','queen': '-1023px','king': '-1116px'},
+
+    MESSAGE = ko.observable(''),
+
+    get_hand_result = function(hand) {
+      var ranks = _.pluck(hand,'rank'),
+          sum = _.reduce(ranks, function(m, n) {
+                  if (n === 1) return m + 11;
+                  return m + (n >= 10 ? 10 : n);
+                }, 0),
+          aces = _.reduce(ranks, function(m, n) {
+                  if (n === 1) return m + 1;
+                  return m;
+                }, 0),
+          aces_left = aces; // counter for sum reduction
+
+      // reduce sum if needed
+      while(sum > 21 && aces_left > 0) {
+        sum -= 10;
+        aces_left--;
+      }
+
+      // blackjack check
+      if (sum === 21 && hand.length === 2) 
+        return 'blackjack';
+      
+      // bust check
+      if (sum > 21) 
+        return 'bust';
+
+      return sum;
+    },
+
+    /**
+    * @class Card
+    * @param {Object} config - Configuration object containing the suit and rank.
+    * @prop {Number} suit - 1-4 depending on if it's a spade, club, diamond, or heart.
+    * @prop {String} suit_name - Enum representation of the suit
+    * @prop {Number} rank - 1-13 depending on the rank. Aces are high.
+    * @method card_value
+    */
+    Card = function(config) {
+      var self = this;
+      
+      self.suit = config.suit;
+      self.suit_name = SUITS[self.suit];
+      self.rank = config.rank;
+      self.rank_name = RANKS[self.rank];
+
+      /**
+      * @prop {boolean} visible - Observable property which returns whether this is visible or not.
+      */
+      self.visible = ko.observable(true);
+
+      self.background_styling = ko.computed(function() {
+        if (self.visible() === true) {
+          return [RANKS_CSS[self.rank_name], SUITS_CSS[self.suit_name]];
+        } else {
+          return [['-1px'],['0px']]; 
+        }
+      });
+    },
+
+    /**
+    * Le deck
+    * @class Deck
+    * @method next - Returns the next card in the deck OR -1 if empty
+    */
+    Deck = function() {
+      var self = this;
+      self.cards = [];
+      
+      /**
+      * Returns the card from the top. Fills & shuffles if necessary.
+      * @method draw
+      * @returns {Card} - Le card
+      * @returns {Boolean} - Empty
+      */
+      self.draw = function() {
+        if (self.cards.length === 0) self.fill();
+        var card = self.cards.shift();
+        return card;
+      }
+
+      /**
+      * @method fill - Fill the deck and shuffle.
+      */
+      self.fill = function() {
+        for(var a = 0; a < 4; a++) {
+          for(var b = 0; b < 13; b++) {
+            self.cards.push(new Card({'suit': a + 1,'rank': b + 1}));
+          }
+        }
+        for(var a = 0; a < self.cards.length; a++) {  // shuffle like a knuth
+          self.cards[a] = self.cards.splice(Math.random() * Math.ceil(a),1,self.cards[a])[0];
+        }
+      }
+
+      self.fill();
+    },
+
+    /**
+    * @class Player
+    * @prop {Dealer} dealer - Reference to the dealer.
+    */
+    Player = function(config) {
+      var self = this;
+
+      /** 
+      * Current hand.
+      * @collection hand
+      */
+      self.hand = ko.observableArray([]);
+
+      /** 
+      * Reference to the game object
+      * @prop game
+      */
+      self.game = config.game;
+
+      /** 
+      * Whether the player is seated or not
+      * @prop seated
+      */
+      self.seated = ko.observable(true);
+      self.is_dealer = false;
+
+      /** 
+      * Unique identifier of this player
+      * @prop id 
+      */
+      self.id = config.id;
+
+      /**
+      * What is this player's status?
+      * 'pending', 'dealme', 'hit', 'stand', 'blackjack'
+      * @prop status
+      */
+      self.status = ko.observable('pending');
+      self._old_status = 'pending';
+      self.emit_status = ko.computed(function() {
+        var status = self.status(); // required for subscription
+        if (status !== 'pending') { // if we're not waiting for the player...
+          if (self.game.dealer_id !== undefined) // ensure correct gamestate
+            self.game.emit_status_change(); // notify the dealer of the player's state
+        }
+      });
+
+      /** 
+      * Player's bankroll. Argument is the amount to adjust by. Returns total.
+      * @prop stack
+      */
+      self._stack = ko.observable(1500);
+      self.stack = ko.computed({
+        read: function() {
+          if (self._stack() <= 0) { // check if user is broke
+            self.seated(false);
+            return 0;
+          }
+          return self._stack();
+        }, write: function(amt) {
+          self._stack(self._stack() + amt);
+        }
+      })
+
+      /** 
+      * Current bet amount. Argument is the amount to adjust by. Returns total.
+      * @method bet
+      */
+      self._bet = ko.observable(25);
+      self.bet = ko.computed({
+        read: function() {
+          return self._bet();
+        }, write: function(val) {
+          if (val + self._bet() < self.stack()) {
+            if (val + self._bet() > 0) { // no negative bets
+              self._bet(self._bet() + val);
+            }
+          } else {
+            if (self.stack() > 0)
+              self._bet(self.stack());
+          }
+        }
+      });
+
+      /** 
+      * User action to start the game.
+      * @method deal
+      */
+      self.deal = _.debounce(function() {
+        self.status('dealme');
+      });
+
+      /** 
+      * Increase bet amount by 25 units.
+      * @method increase_bet
+      */
+      self.increase_bet = function() {
+        self.bet(25);
+      }
+
+      /** 
+      * Decrease bet amount by 25 units
+      * @method decrease_bet
+      */
+      self.decrease_bet = function() {
+        self.bet(-25);
+      }
+
+      /** 
+      * Player action to hit for another card.
+      * @method hit 
+      */
+      self.hit = function() {
+        self.status('hit');
+      }
+
+      /** 
+      * Player action to stand on what he/she has.
+      * @method stand
+      */
+      self.stand = function() {
+        self.status('stand');
+      }
+
+      /**
+      * Computes the state of the users hand. Reports to the dealer. Returns what decisions the user can make.
+      * @method decisions
+      * @returns {object} - Hashtable of decision methods.
+      */
+      self.decisions = ko.computed(function() {
+        var hand = self.hand(),
+            seated = self.seated(),
+            result;
+
+        // preplay check
+        if (hand.length < 2) {
+          return [{
+              name: 'deal', 
+              fn: self.deal // (Q)
+            }, {
+              name: 'increase bet (+25)', 
+              fn: self.increase_bet
+            }, {
+              name: 'decrease bet (-25)', 
+              fn: self.decrease_bet
+            }];
+        }
+
+        // figure out the result of the hand
+        result = get_hand_result(hand);
+
+        // check if the result is special
+        if (result === 'blackjack' || result === 'bust') {
+          setTimeout(function() { // common strategy to avoid race conditions
+            self.status(result);
+          },0);
+        } else {
+          return [{name: 'hit', fn: self.hit}, {name: 'stand with ' + result, fn: self.stand}];
+        }
+
+        return [];
+      });
+
+      self.stack(1500);
+      self._bet(25);
+      self.seated(true);
+    },
+
+    /**
+    * @class Dealer
+    * @prop {Game} game - Access to the main Game object
+    */
+    Dealer = function(args) {
+      var self = this;
+      self.is_dealer = true;
+
+      self.hand = ko.observableArray([]);
+
+      /** @prop game - Reference to the game object */
+      self.game = args.game;
+
+      /** @prop id - Id of the dealer */
+      self.id = self.game.players.length;
+
+      /**
+      * To whom shall make the next decision?
+      * @prop on_player
+      */
+      self.on_player = 0;
+
+      /** 
+      * The deck we're dealing from.
+      * @prop deck
+      */
+      self.deck = new Deck();
+
+      /**
+      * Which player are we working on?
+      * @prop {Number} active_player
+      */
+      self.active_player = 0;
+
+      self.settled = false;
+
+      /**
+      * Triggered when the main player tells the dealer to deal.
+      * @method deal
+      */
+      self.redeal = function() {
+        var players = self.game.players,
+            card, 
+            deal_to;
+
+        // deal the cards
+        for(var a = 0; a < 2; a++) {
+          for(var b = 0; b < players.length; b++) {
+            // grab from the deck
+            draw = self.deck.draw();
+
+            // check to see if it's the hole card and hide if it is
+            if (b === 1 && a === 1) 
+              draw.visible(false);
+
+            // send to the player
+            players[b].hand.push(draw);
+          }
+        }
+      };
+
+      /**
+      * Make things happen when they need to happen. Le "dealer engine".
+      * Triggered by: (1) player.emit_status via Game, (2) player.deal via Game
+      * @method work_it
+      */
+      self.work_it = function() {
+        var players = self.game.players,
+            players_with_no_cards = _.reduce(players, function(m,p) {
+              var no_cards = p.hand().length === 0 ? 1 : 0;
+              return m + no_cards;
+            },0),
+            status = undefined, 
+            dval,
+            hinterval;
+
+        // 1. Deal if necessary
+        if (players_with_no_cards === players.length) {
+          _.each(players, function(pl) {
+            if (pl.id !== self.id && pl.status() === 'dealme' && pl.hand().length === 0) {
+              pl.status('pending');
+              self.active_player = 0;
+              self.redeal();
+            }
+          });
+        } else if (players_with_no_cards === 0 && self.settled === false) {
+
+          // 1. Dealer's turn to play?
+          if (self.active_player == self.id && self.settled == false) {
+            dval = get_hand_result(self.hand());
+            self.hand().forEach(function(c) {c.visible(true)}); // show d hand
+            self.hand.notifySubscribers(self.hand());
+
+            // 2. Dealer blackjacks
+            if (dval === 'blackjack') {
+              _.without(players, self).forEach(function(p) {
+                if (p.status() !== 'blackjack') {
+                  MESSAGE('Dealer blackjacked!');
+                  p.stack(-1 * p.bet());
+                } else {
+                  MESSAGE('It\'s a push!');
+                }
+              });
+              self.settled = true;
+            } else {
+              // 1. Dealer hits
+              hinterval = setInterval(function() {
+                if (dval !== 'bust' && dval < 17) {
+                  MESSAGE('Dealer hits with ' + dval + '!');
+                  self.hand.push(self.deck.draw());
+                  dval = get_hand_result(self.hand()); 
+                } else {
+                  clearInterval(hinterval);
+                }
+              }, 1000);
+
+              if (dval !== 'bust' && dval < 17) {
+                dealer_hit()
+              }
+
+              // 2. Dealer busts
+              if (dval === 'bust') { // dealer busts
+                _.without(players, self).forEach(function(p) {
+                  if (p.status() !== 'bust') {
+                    if (p.status() === 'blackjack') {
+                      MESSAGE('Blackjack! You win $' + Math.ceil(1.5 * p.bet()));
+                      p.stack(Math.ceil(1.5 * p.bet())); // pay 3:2
+                    } else if (p.status() === 'stand') {
+                      MESSAGE('Dealer busts! You win $' + p.bet());
+                      p.stack(p.bet()); // pay 1:1
+                    }
+                  } else {
+                    MESSAGE('You busted and lost $' + p.bet());
+                    p.stack(p.bet() * -1); // scrape
+                  }
+                });
+                self.settled = true;
+
+              // 3. Dealer stands
+              } else if (dval >= 17) { // dealer stands
+                _.without(players, self).forEach(function(p) {
+                  var pval = get_hand_result(p.hand());
+                  if (p.status() === 'blackjack') {
+                    MESSAGE('Blackjack! You win $' + Math.ceil(1.5 * p.bet()));
+                    p.stack(Math.ceil(1.5 * p.bet())); // pay 3:2
+                  } else if (pval > dval) { // pay 1:1
+                    MESSAGE('Dealer stands with ' + dval + '! You win $' + p.bet());
+                    p.stack(p.bet());
+                  } else { // scrape if equal or less than
+                    MESSAGE('Dealer stands with ' + dval + '. You lost $' + p.bet());
+                    p.stack(-1 * p.bet());
+                  }
+                });
+                self.settled = true;
+              }
+            }
+          } else if (self.active_player !== self.id && self.settled === false) {
+            // 1. Set the active player
+            p = players[self.active_player];
+            status = p.status();
+            // 2. Send the player a card
+            if (status === 'hit') {
+              p.status('pending');
+              p.hand.push(self.deck.draw());
+            } else if (['stand','blackjack','bust'].indexOf(status) >= 0) {
+            // 3. Check it it's the dealer's turn to play
+              self.active_player += 1;
+              self.work_it();
+            }
+          }
+        }
+
+        // 2. Close out the hand if necessary.
+        if (self.settled === true) {
+          self.active_player = 0;
+          self.settled = false;
+          setTimeout(function() {
+            players.forEach(function(p) {
+              MESSAGE('');
+              p.hand([]);
+            })  
+          }, 3250);
+        }
+      };
+    },
+
+    /**
+    * @class Game
+    */
+    Game = function(config) {
+      var self = this;
+      self.player_notification = ko.observable();
+      self.players = [];
+      self.dealer = undefined;
+      self.dealer_id = undefined;
+      self.MESSAGE = MESSAGE;
+
+      /**
+      * Let's the dealer know when a player's status has changed. (dealer pre-excluded)
+      * @method emit_status_change
+      */
+      self.emit_status_change = function() {
+        self.dealer.work_it();
+      }
+
+      self.init = function() {
+        for(var a = 0; a < config.players; a++) {
+          self.players.push(new Player({
+            'id': a,
+            'game': self,
+            'stack': 1500,
+            'seated': true
+          }));
+        }
+
+        self.dealer = new Dealer({'game': self});
+        self.dealer_id = dealer.id;
+        self.players.push(self.dealer);
+      }
+    },
+
+    the_game = new Game({'players': 1});
+    the_game.init();
+    ko.applyBindings(the_game);
+  })(_,ko);
+</script>
 </html>
