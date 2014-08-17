@@ -15,4 +15,4 @@ Notes: The original css file was using the background-position-(x|y) property. T
 
 #### Computerized Players
 
-I was originally expecting to have enough to to implement computerized players but as time progressed I struck this feature off the backlog, realizing the time wasn't there. Would have been fun to compute probabilities over 100's of thousands of automated rounds. This would enable recommendations for the player's actions.
+I was originally expecting to have enough to time to implement computerized players but as time progressed I struck this feature off the todo list, realizing the time wasn't there. Would have been fun to compute probabilities over 100's of thousands of automated rounds. This would enable recommendations for the player's actions but is clearly outside the scope of this project.
