@@ -289,7 +289,9 @@
       * @method hit 
       */
       self.hit = function() {
-        self.status('hit');
+        setTimeout(function() {
+          self.status('hit');  
+        });
       }
 
       /** 
@@ -297,7 +299,9 @@
       * @method stand
       */
       self.stand = function() {
-        self.status('stand');
+        setTimeout(function() {
+          self.status('stand');  
+        });
       }
 
       /**
@@ -335,7 +339,6 @@
         } else {
           return [{name: 'hit', fn: self.hit}, {name: 'stand with ' + result, fn: self.stand}];
         }
-
         return [];
       });
 
@@ -459,10 +462,6 @@
                   clearInterval(hinterval);
                 }
               }, 1000);
-
-              if (dval !== 'bust' && dval < 17) {
-                dealer_hit()
-              }
 
               // 2. Dealer busts
               if (dval === 'bust') { // dealer busts
