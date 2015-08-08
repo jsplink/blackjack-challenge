@@ -4,7 +4,7 @@
 
 Using the provided files (attached) as a starting point, build a single player blackjack game in a browser. Feel free to use any frameworks, libraries, etc. We've included some markup to allow you to easily create cards. Please see the html and css files for an example of how to use that. We've also included a blackjack table background image. There should be a way for a player to receive two initial cards and the dealer's initial card, hit as we please until we finally stand, and learn the outcome. The dealer should play the typical dealer strategy of standing at 17 or greater.  
 
-## Solution [demo here](http://creativeroots.io/blackjack)
+## Solution
 
 Estimated time: 10 hours
 Actual time: between 10 and 11 hours
